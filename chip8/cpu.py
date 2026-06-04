@@ -42,8 +42,13 @@ class CPU:
             0x0000: self._op_0,
             0x1000: self._op_1,
             0x2000: self._op_2,
+            0x3000: self._op_3,
+            0x4000: self._op_4,
+            0x5000: self._op_5,
             0x6000: self._op_6,
             0x7000: self._op_7,
+            0x9000: self._op_9,
+            0xA000: self._op_A,
         }
 
     def _return_from_routine(self):
@@ -53,6 +58,9 @@ class CPU:
     def _call_subroutine(self, addr):
         self.stack.append(self.pc)
         self.pc = addr
+
+    def _next_instruction(self):
+        self.pc += 2
 
     # https://craigthomas.ca/blog/2014/07/17/writing-a-chip-8-emulator-part-2/
     def _op_0(self, opcode):
@@ -64,7 +72,7 @@ class CPU:
         elif subcode == 0xEE:
             self._return_from_routine()
         else:
-            raise ValueError(f"Unknown (00xx) opcode: {opcode:04X} ")
+            raise ValueError(f"Unknown (00xx) opcode: {opcode:04X}")
 
     def _op_1(self, opcode):
         # 1nnn - Jump to address nnn
@@ -76,6 +84,42 @@ class CPU:
         addr = opcode & 0x0FFF
         self._call_subroutine(addr)
 
+    def _op_3(self, opcode):
+        # 3snn - Skip next instruction if register s value equals nn
+        register = (opcode & 0x0F00) >> 8
+        value = opcode & 0x00FF
+        if value == self.v[register]:
+            self.pc += 2
+
+    def _op_4(self, opcode):
+        # 4snn - Do not skip next instruction if register s value equals nn
+        register = (opcode & 0x0F00) >> 8
+        value = opcode & 0x00FF
+        if value != self.v[register]:
+            self._next_instruction()
+
+    def _op_5(self, opcode):
+        # 5st0 - Skip if register s value equals register t value
+        if opcode & 0xF != 0:
+            raise ValueError(f"Unknown (5st0) opcode: {opcode:04X} ")
+        s = (opcode & 0x0F00) >> 8
+        t = (opcode & 0x00F0) >> 4
+        if self.v[s] == self.v[t]:
+            self._next_instruction()
+
+    def _op_9(self, opcode):
+        # 9st0 - Skip next instruction if register s not equal register t
+        if opcode & 0xF != 0:
+            raise ValueError(f"Unknown (9st0) opcode: {opcode:04X} ")
+        s = (opcode & 0x0F00) >> 8
+        t = (opcode & 0x00F0) >> 4
+        if self.v[s] != self.v[t]:
+            self._next_instruction()
+
+    def _op_A(self, opcode):
+        # Annn - Load index with value nnn
+        value = opcode & 0x0FFF
+        self.i = value
 
     def _op_6(self, opcode):
         # 6snn - Load register s with value nn
@@ -102,7 +146,7 @@ class CPU:
     def step(self):
         # Fetch the next opcode (2 bytes) and increment the program counter
         opcode = (self.memory[self.pc] << 8) | self.memory[self.pc + 1]
-        self.pc += 2
+        self._next_instruction()
         handler = self._get_dispatcher(opcode)
         handler(opcode)
 
