@@ -39,16 +39,43 @@ class CPU:
         self.sound_timer = 0
         self.memory[:len(FONT_DATA)] = FONT_DATA # Font data is stored in the first 80 bytes
         self._dispatch = {
+            0x0000: self._op_0,
             0x1000: self._op_1,
+            0x2000: self._op_2,
             0x6000: self._op_6,
             0x7000: self._op_7,
         }
 
+    def _return_from_routine(self):
+        # Deliberately not check empty stack
+        self.pc = self.stack.pop()
+
+    def _call_subroutine(self, addr):
+        self.stack.append(self.pc)
+        self.pc = addr
+
     # https://craigthomas.ca/blog/2014/07/17/writing-a-chip-8-emulator-part-2/
+    def _op_0(self, opcode):
+        # 00E0 - Clear the screen
+        # 00EE - Return from subroutine
+        subcode = opcode & 0x00FF
+        if subcode == 0xE0:
+            self.display.clear()
+        elif subcode == 0xEE:
+            self._return_from_routine()
+        else:
+            raise ValueError(f"Unknown (00xx) opcode: {opcode:04X} ")
+
     def _op_1(self, opcode):
         # 1nnn - Jump to address nnn
         address = opcode & 0x0FFF
         self.pc = address
+
+    def _op_2(self, opcode):
+        # 2nnn - Call routine at address nnn
+        addr = opcode & 0x0FFF
+        self._call_subroutine(addr)
+
 
     def _op_6(self, opcode):
         # 6snn - Load register s with value nn
@@ -60,7 +87,7 @@ class CPU:
         # 7snn - Add value nn to register s
         register = (opcode & 0x0F00) >> 8
         value = opcode & 0x00FF
-        self.v[register]  = (self.v[register] + value) & 0xFF
+        self.v[register] = (self.v[register] + value) & 0xFF
         # No carry. carry handled by 8st4
 
     def _get_dispatcher(self, opcode):
