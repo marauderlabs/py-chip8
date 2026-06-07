@@ -31,8 +31,8 @@ class CPU:
         self.display = display
         self.input = input_device
         self.memory = bytearray(self.MEMORY_SIZE)
-        self.v = [0] * 16        # registers V0–VF
-        self.i = 0               # index register
+        self.v = [0] * 16        # 8-bit registers V0–VF
+        self.i = 0               # 12-bit index register
         self.pc = self.ROM_START
         self.stack = []          # TBD: Mimic actual interpreter
         self.delay_timer = 0
@@ -47,6 +47,7 @@ class CPU:
             0x5000: self._op_5,
             0x6000: self._op_6,
             0x7000: self._op_7,
+            0x8000: self._op_8,
             0x9000: self._op_9,
             0xA000: self._op_A,
         }
@@ -107,10 +108,53 @@ class CPU:
         if self.v[s] == self.v[t]:
             self._next_instruction()
 
+    def _op_8(self, opcode):
+        # 8stx - Arithmetic ops
+        subcode = opcode & 0xF
+        s = (opcode & 0x0F00) >> 8
+        t = (opcode & 0x00F0) >> 4
+
+        # 8st0 - Move value from register s to register t
+        if subcode == 0:
+            self.v[t] = self.v[s]
+        # 8st1 - Perform logical OR on register s and t and store in t
+        elif subcode == 1:
+            self.v[t] |= self.v[s]
+        # 8st2 - Perform logical AND on register s and t and store in t
+        elif subcode == 2:
+            self.v[t] &= self.v[s]
+        # 8st3 - Perform logical XOR on register s and t and store in t
+        elif subcode == 3:
+            self.v[t] ^= self.v[s]
+        # 8st4 - Add s to t and store in s - register F set on carry
+        elif subcode == 4:
+            self.v[s] += self.v[t]
+            self.v[0xF] = self.v[s] >> 8
+            self.v[s] &= 0xFF
+        # 8st5 - Subtract s from t and store in s - register F set on no-borrow
+        elif subcode == 5:
+            self.v[0xF] = 1 if self.v[s] >= self.v[t] else 0
+            self.v[s] = (self.v[s] - self.v[t]) & 0xFF
+        # 8s06 - Shift bits in register s 1 bit to the right - bit 0 shifts to register F
+        elif subcode == 6:
+            self.v[0xF] = self.v[s] & 0x1
+            self.v[s] >>= 1
+        # 8st7 - same logic as 8st5 but operands swapped
+        elif subcode == 7:
+            self.v[0xF] = 1 if self.v[t] >= self.v[s] else 0
+            self.v[s] = (self.v[t] - self.v[s]) & 0xFF
+        # 8s0E - Shift bits in register s 1 bit to the left - bit 7 shifts to register F
+        elif subcode == 0XE:
+            self.v[0xF] = (self.v[s] & 0b1000_0000) >> 7
+            self.v[s] <<= 1
+            self.v[s] &= 0xFF
+        else:
+            raise ValueError(f"Unknown (8stx) opcode: {opcode:04X}")
+
     def _op_9(self, opcode):
         # 9st0 - Skip next instruction if register s not equal register t
         if opcode & 0xF != 0:
-            raise ValueError(f"Unknown (9st0) opcode: {opcode:04X} ")
+            raise ValueError(f"Unknown (9st0) opcode: {opcode:04X}")
         s = (opcode & 0x0F00) >> 8
         t = (opcode & 0x00F0) >> 4
         if self.v[s] != self.v[t]:
