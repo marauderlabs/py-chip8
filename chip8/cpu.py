@@ -52,6 +52,7 @@ class CPU:
             0xA000: self._op_A,
             0xB000: self._op_B,
             0xC000: self._op_C,
+            0xD000: self._op_D,
         }
 
     def _return_from_routine(self):
@@ -176,6 +177,27 @@ class CPU:
         operand = opcode & 0x00FF
         register = (opcode & 0x0F00) >> 8
         self.v[register] = random.randint(0, 255) & operand
+
+    def _op_D(self, opcode):
+        # Dstn - Draw n byte sprite at x location reg s, y location reg t
+        s = (opcode & 0x0F00) >> 8
+        t = (opcode & 0x00F0) >> 4
+        n = opcode & 0x000F
+        x, y = self.v[s], self.v[t]
+        self.v[0xF] = 0 # reset flag reg
+        for row in range(n):
+            y_pos = y + row
+            if y_pos >= self.display.HEIGHT or self.i + row >= self.MEMORY_SIZE:
+                break
+
+            sprite_byte = self.memory[self.i + row]
+            for bit in range(8):
+                x_pos = x + bit
+                if x_pos >= self.display.WIDTH:
+                    break
+                if sprite_byte & (0x80 >> bit):
+                    if self.display.xor_pixel(x_pos, y_pos):
+                        self.v[0xF] = 1
 
     def _op_6(self, opcode):
         # 6snn - Load register s with value nn
