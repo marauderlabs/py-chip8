@@ -50,6 +50,8 @@ class CPU:
             0x8000: self._op_8,
             0x9000: self._op_9,
             0xA000: self._op_A,
+            0xB000: self._op_B,
+            0xC000: self._op_C,
         }
 
     def _return_from_routine(self):
@@ -164,6 +166,16 @@ class CPU:
         # Annn - Load index with value nnn
         value = opcode & 0x0FFF
         self.i = value
+
+    def _op_B(self, opcode):
+        # Bnnn - Jump to address nnn + index
+        self.pc = (opcode & 0x0FFF) + self.i
+
+    def _op_C(self, opcode):
+        # Ctnn - Sets register t to the result of a bitwise and operation on a random number (Typically: 0 to 255) and NN
+        operand = opcode & 0x00FF
+        register = (opcode & 0x0F00) >> 8
+        self.v[register] = random.randint(0, 255) & operand
 
     def _op_6(self, opcode):
         # 6snn - Load register s with value nn
