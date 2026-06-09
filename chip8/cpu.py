@@ -53,6 +53,7 @@ class CPU:
             0xB000: self._op_B,
             0xC000: self._op_C,
             0xD000: self._op_D,
+            0xE000: self._op_E,
         }
 
     def _return_from_routine(self):
@@ -198,6 +199,21 @@ class CPU:
                 if sprite_byte & (0x80 >> bit):
                     if self.display.xor_pixel(x_pos, y_pos):
                         self.v[0xF] = 1
+
+    def _op_E(self, opcode):
+        #Ex9E — skip if key V[x] is currently pressed
+        #ExA1 — skip if key V[x] is not pressed
+        register = (opcode & 0x0F00) >> 8
+        subcode = opcode & 0x00FF
+        key = self.v[register]
+        if subcode == 0x9E:
+            if self.input.is_pressed(key):
+                self._next_instruction()
+        elif subcode == 0xA1:
+            if not self.input.is_pressed(key):
+                self._next_instruction()
+        else:
+            raise ValueError(f"Unknown (Exxx) opcode: {opcode:04x}")
 
     def _op_6(self, opcode):
         # 6snn - Load register s with value nn
