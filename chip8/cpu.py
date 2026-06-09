@@ -54,6 +54,7 @@ class CPU:
             0xC000: self._op_C,
             0xD000: self._op_D,
             0xE000: self._op_E,
+            0xF000: self._op_F,
         }
 
     def _return_from_routine(self):
@@ -214,6 +215,54 @@ class CPU:
                 self._next_instruction()
         else:
             raise ValueError(f"Unknown (Exxx) opcode: {opcode:04x}")
+
+    def _op_F(self, opcode):
+        register = (opcode & 0x0F00) >> 8
+        subcode = opcode & 0x00FF
+
+        # Fx07 — V[x] = delay_timer
+        if subcode == 0x07:
+            self.v[register] = self.delay_timer
+        # Fx0A — wait for keypress, store in V[x] (blocking)
+        elif subcode == 0x0A:
+            key_pressed = False
+            while not key_pressed:
+                for key in range(16):
+                    if self.input.is_pressed(key):
+                        self.v[register] = key
+                        key_pressed = True
+                        break
+        # Fx15 — delay_timer = V[x]
+        elif subcode == 0x15:
+            self.delay_timer = self.v[register]
+        # Fx18 — sound_timer = V[x]
+        elif subcode == 0x18:
+            self.sound_timer = self.v[register]
+        # Fx1E — I += V[x]
+        elif subcode == 0x1E:
+            self.i += self.v[register]
+        # Fx29 — I = font address for digit V[x] (each font char is 5 bytes, starts at 0)
+        elif subcode == 0x29:
+            digit = self.v[register]
+            self.i = digit*5
+        # Fx33 — store BCD of V[x] at I, I+1, I+2
+        elif subcode == 0x33:
+            # Splits a number like 156 into three digits: hundreds=1, tens=5, ones=6 — stored at I, I+1, I+2:
+            val = self.v[register]
+            self.memory[self.i]     = val // 100
+            self.memory[self.i + 1] = (val % 100) // 10
+            self.memory[self.i + 2] = val % 10
+        # Fx55 — store V[0]–V[x] in memory starting at I
+        elif subcode == 0x55:
+            for n in range(register + 1):
+                self.memory[self.i + n] = self.v[n]
+        # Fx65 — read memory starting at I into V[0]–V[x]
+        elif subcode == 0x65:
+            for n in range(register + 1):
+                self.v[n] = self.memory[self.i +n]
+        else:
+            raise ValueError(f"Unknown (Fxxx) opcode: {opcode:04x}")
+
 
     def _op_6(self, opcode):
         # 6snn - Load register s with value nn
